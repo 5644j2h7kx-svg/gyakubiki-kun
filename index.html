@@ -1,0 +1,167 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>逆引きくん v1.2</title><style>
+*{box-sizing:border-box}body{margin:0;background:#101112;color:#eee;font:15px system-ui,-apple-system,sans-serif}.app{max-width:680px;margin:auto;padding:18px 10px 38px}h1{font-size:21px;margin:0 0 6px}.muted{color:#abb1b2;font-size:12px}.toolbar,.modes,.history{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:14px 0}button,select{font:inherit;color:#eee;background:#292d30;border:1px solid #454b4d;border-radius:9px;min-height:40px;padding:7px 10px;touch-action:manipulation}button:focus-visible{outline:2px solid #a3e7be}button.active{background:#345f49;border-color:#9de2bd}.board{display:grid;grid-template-columns:32px repeat(6,minmax(0,1fr));margin-top:12px}.label{text-align:center;color:#b9bec0;font-size:12px;align-self:center}.cell{border:0;border-bottom:2px solid #53585a;border-radius:0;min-height:40px;padding:2px;background:linear-gradient(90deg,transparent calc(50% - 1px),#676b6d 50%,transparent calc(50% + 1px)),#1e2224;position:relative}.cell.selected{background:#365d4a}.dot{display:inline-flex;flex-direction:column;align-items:center;justify-content:center;width:33px;height:33px;border-radius:50%;background:#26734f;color:#fff;border:2px solid #b7f3d2;font-weight:800;line-height:1.02}.dot .note{font-size:12px}.dot .degree{font-size:9px;margin-top:1px;opacity:.9}.state,.rootbtn{padding:2px;min-height:38px;font-size:12px}.rootbtn{color:#a5d9b6}.rootbtn.active{background:#2b7754;color:white}.marker{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:8px;height:8px;background:#b5b9ba;border-radius:50%;opacity:.32;pointer-events:none}.cell.selected .marker{opacity:.14}.dot{position:relative;z-index:2}
+/* Duplicate exact-pitch visualization: same MIDI note on multiple active strings. */
+.cell.duplicate .dot{box-shadow:0 0 0 3px #101112,0 0 0 5px #f1d36a}
+.dup-count{position:absolute;right:-7px;top:-8px;z-index:4;min-width:20px;height:17px;padding:0 4px;border-radius:9px;background:#f1d36a;color:#17191a;border:1px solid #fff3b6;font-size:9px;font-weight:900;line-height:15px;text-align:center;pointer-events:none}
+.state.duplicate{position:relative;box-shadow:inset 0 0 0 2px #f1d36a;color:#fff3b6}
+.state.duplicate .dup-count{right:-4px;top:-5px}.panel{background:#222729;border-radius:15px;padding:15px;margin-top:16px}.title{font-size:29px;font-weight:700;margin:6px 0}.chips{display:flex;flex-wrap:wrap;gap:7px;margin:10px 0}.chip{padding:6px 9px;border-radius:9px;background:#171b1d;border:1px solid #404548;font-size:13px}.chip b{margin-right:5px}.candidate{padding:9px 0;border-bottom:1px solid #444}.candidate:last-child{border:0}.small{font-size:12px;color:#bec4c5;line-height:1.6}.mode{font-size:12px}.mode.active{background:#315e46}.r{color:#7bbcff}.third{color:#78d4a0}.fifth{color:#bdc4ce}.seventh{color:#e9bb69}.tension{color:#c5a1ff}.other{color:#f29c9c}details summary{cursor:pointer;padding:10px 0;color:#b9e4c9}.hidden{display:none}.section{margin-top:17px;padding-top:13px;border-top:1px solid #3a3f41}.history button{font-size:12px;min-height:36px;padding:6px 9px}.audio button{min-width:92px}.test-note{display:inline-flex;align-items:center;gap:5px;color:#abb1b2;font-size:12px}.test-note select{min-width:64px;min-height:40px}.audio-controls{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin:8px 0}.audio-controls .group{display:flex;gap:4px;align-items:center}.audio-controls button{min-width:42px;min-height:36px;padding:5px 8px}.audio-controls .wide{min-width:78px}.hint{margin-top:5px}.badge{display:inline-block;padding:2px 6px;border:1px solid #56605c;border-radius:6px;margin-left:4px;font-size:11px;color:#b9e4c9}@media(max-width:420px){.app{padding-left:7px;padding-right:7px}.board{grid-template-columns:28px repeat(6,minmax(0,1fr))}.dot{width:32px;height:32px}.toolbar{gap:6px}button,select{padding:7px 8px}.title{font-size:27px}}
+/* v1.1 trial: compact playback strip stays at the top while browsing the fretboard. */
+.play-strip{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:rgba(20,24,25,.97);border:1px solid #454b4d;border-radius:12px;padding:7px;margin:12px 0 8px;box-shadow:0 4px 12px #0008;display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.play-strip button{min-width:0;flex:1 1 auto;padding:7px 6px;min-height:40px}
+.play-strip .test-note{flex:0 0 auto}
+.play-strip .test-note select{min-width:54px}
+@media(max-width:420px){.play-strip{gap:4px;padding:5px}.play-strip button{font-size:12px}.play-strip .test-note{font-size:11px}}
+
+/* Horizontal fretboard experiment: six strings run left-to-right across 21 frets. */
+.board-scroll{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;margin-top:10px;border:1px solid #363c3e;border-radius:12px;background:#171a1c;scrollbar-width:thin}
+.horizontal-board{display:grid;grid-template-columns:46px 40px 44px repeat(21,52px) 40px;grid-template-rows:28px repeat(6,44px);width:max-content;min-width:100%;margin:0;padding:5px 6px 8px;gap:0}
+.horizontal-board .label{font-size:11px;white-space:nowrap;padding:0 3px}
+.horizontal-board .string-label{position:sticky;left:0;z-index:6;background:#171a1c;font-weight:700}
+.horizontal-board .root-left{position:sticky;left:46px;z-index:5;background:#202527}
+.horizontal-board .state-left{position:sticky;left:86px;z-index:5;background:#202527}
+.horizontal-board .cell{width:52px;min-height:44px;border:0;border-right:2px solid #5a6062;border-bottom:1px solid #3c4143;background:#1e2224;display:flex;align-items:center;justify-content:center;position:relative}
+.horizontal-board .cell.selected{background:#365d4a}
+.horizontal-board .marker{left:50%;top:3px;transform:translateX(-50%)}
+.horizontal-board .fret-label{border-right:2px solid #454b4d;color:#b9bec0}
+.horizontal-board .dot{width:34px;height:34px}
+.horizontal-board .rootbtn,.horizontal-board .state{min-height:40px;border-radius:7px;margin:2px}
+.board-scroll::after{content:'← 指板を左右にスワイプ →';position:sticky;left:8px;display:block;width:max-content;color:#8f999c;font-size:10px;padding:3px 6px}
+@media(max-width:420px){.horizontal-board{grid-template-columns:44px 38px 42px repeat(21,50px) 38px;grid-template-rows:26px repeat(6,42px)}.horizontal-board .cell{width:50px;min-height:42px}.horizontal-board .string-label{left:0}.horizontal-board .root-left{left:44px}.horizontal-board .state-left{left:82px}}
+
+/* Compact horizontal trial: save vertical space while preserving tapability. */
+.app{padding-top:10px}
+h1{margin-bottom:3px}
+.toolbar,.modes,.history{margin:8px 0;gap:6px}
+.play-strip{margin:7px 0 6px;padding:5px}
+.panel{padding:11px;margin-top:10px}
+.section{margin-top:11px;padding-top:9px}
+.audio-controls{margin:5px 0;gap:5px}
+.audio-controls button{min-height:34px;padding:4px 7px}
+.audio-controls .wide{min-width:48px}
+.horizontal-board{grid-template-columns:42px 36px 40px repeat(21,48px) 36px;grid-template-rows:23px repeat(6,38px);padding:4px 5px 5px}
+.horizontal-board .cell{width:48px;min-height:38px}
+.horizontal-board .dot{width:32px;height:32px}
+.horizontal-board .rootbtn,.horizontal-board .state{min-height:34px;margin:1px}
+.horizontal-board .root-left{left:42px}
+.horizontal-board .state-left{left:78px}
+.board-scroll{margin-top:6px}
+@media(max-width:420px){
+ .app{padding-top:8px}
+ .horizontal-board{grid-template-columns:40px 34px 38px repeat(21,46px) 34px;grid-template-rows:22px repeat(6,37px)}
+ .horizontal-board .cell{width:46px;min-height:37px}
+ .horizontal-board .root-left{left:40px}
+ .horizontal-board .state-left{left:74px}
+ .horizontal-board .dot{width:31px;height:31px}
+}
+</style></head><body><main class="app"><h1>🎸 逆引きくん <span class="muted">v1.2</span></h1><div class="muted">このコード、なんだろ？ 逆引きくんが華麗にお答えします。たぶん。</div><div class="muted">標準チューニング E A D G B E · 実物のネック感覚で左→右へ。指板は横スクロールできます。</div>
+<div class="toolbar"><label>TUNE <select id="tune"><option value="standard">STD</option><option value="dropd">Drop D</option><option value="opend">Open D</option><option value="openg">Open G</option><option value="dadgad">DADGAD</option></select></label><label>CAPO <select id="capo"></select></label><button id="accidental">♯</button><button id="clear">全弦ミュート</button><button id="reset">リセット</button></div>
+<div class="muted">左端：○ 開放 / × ミュート。フレット再タップで開放へ戻る。左端の ○/× で開放・ミュートを切替。各弦の前後の R ボタンでルートを指定。指板部分は左右にスワイプできます。</div><div class="play-strip audio" aria-label="試聴ボタン"><button id="playChord">コード</button><button id="playArp">アルペジオ</button><button id="testTone">テスト</button><label class="test-note">音 <select id="testNote" aria-label="テスト音のノート"></select></label></div><div class="board-scroll" id="boardScroll"><div id="board" class="board horizontal-board"></div></div>
+<div class="panel"><div class="muted">ルート判定モード</div><div class="modes"><button class="mode" data-mode="fixed">指定ルート優先</button><button class="mode active" data-mode="auto">自動推測</button><button class="mode" data-mode="bass">最低音優先</button></div><div class="small" id="rootinfo"></div><div class="title" id="name">指板をタップ</div><div class="small" id="voice"></div><div class="small" id="reason"></div><div class="chips" id="chips"></div><div class="small" id="raw"></div>
+<div class="toolbar audio"><button id="tapSound" class="active">タップ音 ON</button></div>
+<div class="audio-controls"><span class="muted">音量</span><div class="group" id="volumeGroup"><button data-vol="small">小</button><button class="active" data-vol="medium">中</button><button data-vol="large">大</button></div><span class="muted">OCT</span><div class="group"><button id="octDown">−</button><button id="octValue" class="wide" disabled>0</button><button id="octUp">＋</button></div></div>
+<div class="small hint">簡易確認音です。ミュート弦は鳴らさず、カポ設定後の実音を再生します。オクターブ設定は試聴だけに作用します。 <span id="audioStatus">試聴できます</span></div>
+<details id="alternatives"><summary>別のコード候補を表示</summary><div id="candidates"></div></details>
+<div class="section"><div class="muted">履歴 <span class="badge">最大8件</span></div><div class="history" id="history"></div></div></div>
+<div class="small" style="margin-top:15px">音程計算は確定情報、コード名は解釈です。「指定ルート優先」では指定したルートを第一に表示し、最低音が異なる場合は別情報として示します。分数コード候補は詳細で確認できます。</div></main><script>
+(()=>{'use strict';
+const tunings={standard:[40,45,50,55,59,64],dropd:[38,45,50,55,59,64],opend:[38,45,50,54,57,62],openg:[38,43,50,55,59,62],dadgad:[38,45,50,55,57,62]};let tuning=[...tunings.standard],tuningKey='standard';const flatNames=['C','D♭','D','E♭','E','F','G♭','G','A♭','A','B♭','B'],sharpNames=['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];const $=id=>document.getElementById(id);let shape=[0,0,0,0,0,0],mode='auto',selectedRoot=null,capo=0,useSharps=true,history=[];const noteName=pc=>(useSharps?sharpNames:flatNames)[((pc%12)+12)%12];
+for(let i=0;i<=12;i++){const o=document.createElement('option');o.value=i;o.textContent=i===0?'なし':i+'F';$('capo').append(o)}
+const patterns=[['',[0,4,7]],['m',[0,3,7]],['5',[0,7]],['7',[0,4,7,10]],['maj7',[0,4,7,11]],['m7',[0,3,7,10]],['m(maj7)',[0,3,7,11]],['6',[0,4,7,9]],['m6',[0,3,7,9]],['dim',[0,3,6]],['dim7',[0,3,6,9]],['m7♭5',[0,3,6,10]],['aug',[0,4,8]],['sus2',[0,2,7]],['sus4',[0,5,7]],['7sus4',[0,5,7,10]],['add9',[0,2,4,7]],['m(add9)',[0,2,3,7]],['9',[0,2,4,7,10]],['maj9',[0,2,4,7,11]],['m9',[0,2,3,7,10]],['6/9',[0,2,4,7,9]],['7♭9',[0,1,4,7,10]],['7♯9',[0,3,4,7,10]],['7♯5',[0,4,8,10]],['m13',[0,2,3,7,9,10]],['m7(add13)',[0,3,7,9,10]],['7(add13)',[0,4,7,9,10]],['maj7(add13)',[0,4,7,9,11]]];
+const ivLabels={0:'R',1:'♭9',2:'9',3:'♭3',4:'3',5:'11',6:'♭5',7:'5',8:'♯5',9:'13',10:'♭7',11:'7'};function roleClass(iv){return iv===0?'r':[3,4].includes(iv)?'third':[6,7,8].includes(iv)?'fifth':[10,11].includes(iv)?'seventh':[1,2,5,9].includes(iv)?'tension':'other'}const pcsOf=midi=>[...new Set(midi.map(n=>n%12))];const same=(a,b)=>a.length===b.length&&a.every(x=>b.includes(x));
+function voicedMidi(){return shape.flatMap((f,i)=>f<0?[]:[tuning[i]+f+capo])}
+function analyze(){const midi=voicedMidi(),pcs=pcsOf(midi);if(!midi.length)return {midi,pcs,candidates:[],bass:null};const bass=Math.min(...midi)%12;const roots=mode==='fixed'&&selectedRoot!==null?[selectedRoot]:Array.from({length:12},(_,i)=>i);const candidates=[];
+for(const root of roots)for(const [suffix,intervals] of patterns){const observed=pcs.map(pc=>(pc-root+12)%12),missing=intervals.filter(iv=>!observed.includes(iv)),extra=observed.filter(iv=>!intervals.includes(iv));if(extra.length)continue;if(!observed.some(iv=>[2,3,4,5].includes(iv))&&observed.length>2)continue;if(missing.some(iv=>[3,4,10,11].includes(iv)))continue;if(missing.length>1||missing.some(iv=>iv!==7))continue;if(observed.length<2)continue;const exact=missing.length===0;let score=100-missing.length*12-(observed.includes(0)?0:12)-Math.max(0,intervals.length-4)*1.5-(suffix.length>8?3:0);if(mode==='bass'&&bass===root)score+=14;if(mode==='auto'&&bass===root)score+=5;if(mode==='fixed'&&selectedRoot===root)score+=18;const base=noteName(root)+suffix+(missing.length?'(no5)':'');const slash=bass===root?'':'/'+noteName(bass);candidates.push({baseName:base,slashName:base+slash,root,suffix,intervals,score,exact,missing,reason:exact?'構成音が一致':'完全5度を省略した解釈'});}
+for(const root of roots){const observed=pcs.map(pc=>(pc-root+12)%12);if(same(observed,[0,3,9,10])){const base=noteName(root)+'m7(add13,no5)',score=105+(mode==='fixed'&&selectedRoot===root?18:0)+(mode==='bass'&&bass===root?14:0);candidates.push({baseName:base,slashName:base+(bass===root?'':'/'+noteName(bass)),root,intervals:[0,3,7,9,10],score,exact:false,missing:[7],reason:'R・♭3・♭7・13を確認。完全5度は省略'});}}
+candidates.sort((a,b)=>b.score-a.score||a.baseName.length-b.baseName.length||a.baseName.localeCompare(b.baseName));const seen=new Set;return {midi,pcs,bass,candidates:candidates.filter(c=>{const k=c.root+'|'+c.baseName;return !seen.has(k)&&seen.add(k)}).slice(0,15)};}
+function displayName(c,bass){if(!c)return '';if(mode==='fixed'&&selectedRoot!==null)return c.baseName;return c.slashName}
+function addHistory(a,primary){if(!primary||!a.midi.length)return;const key=[shape.join(','),selectedRoot,capo,mode,useSharps,tuningKey].join('|');if(history[0]?.key===key)return;history=history.filter(h=>h.key!==key);history.unshift({key,shape:[...shape],selectedRoot,capo,mode,useSharps,tuningKey,label:displayName(primary,a.bass)});history=history.slice(0,8)}
+function renderHistory(){const box=$('history');box.replaceChildren();if(!history.length){const s=document.createElement('span');s.className='small';s.textContent='まだ履歴はありません';box.append(s);return}history.forEach(h=>{const b=document.createElement('button');b.textContent=h.label+(h.capo?' · capo '+h.capo:'');b.onclick=()=>{shape=[...h.shape];selectedRoot=h.selectedRoot;capo=h.capo;mode=h.mode;useSharps=h.useSharps;tuningKey=h.tuningKey||'standard';tuning=[...tunings[tuningKey]];$('tune').value=tuningKey;$('capo').value=capo;$('accidental').textContent=useSharps?'♯':'♭';draw(false)};box.append(b)})}
+function confidenceLine(a,primary){
+ if(!primary)return a.midi.length?'うーん……ボクにはまだ名前を決めきれません。':'';
+ const shown=displayName(primary,a.bass),second=a.candidates[1],gap=second?primary.score-second.score:99;
+ if(primary.exact&&gap>=8)return shown+'です。';
+ if(primary.exact||gap>=5)return 'たぶん'+shown+'です。';
+ if(second&&gap<3)return shown+'か'+displayName(second,a.bass)+'あたりです。';
+ return 'おそらく'+shown+'かな？';
+}
+function tapNote(midi){if(!tapSound)return;withAudio(c=>{pluck(c,midi,c.currentTime+.012,.48,.14);setAudioStatus(''+noteName(midi%12));finishStatus(560)})}
+function draw(record=true){
+ const b=$('board');b.replaceChildren();
+ const a=analyze(),primary=a.candidates[0],activeRoot=primary?.root??(selectedRoot??a.bass);
+ const exactMidi=shape.map((f,i)=>f<0?null:tuning[i]+f+capo);
+ const midiCounts=new Map;exactMidi.forEach(m=>{if(m!==null)midiCounts.set(m,(midiCounts.get(m)||0)+1)});
+ const duplicateCount=i=>exactMidi[i]===null?0:(midiCounts.get(exactMidi[i])||0);
+ function addDupBadge(el,count){if(count<2)return;el.classList.add('duplicate');const x=document.createElement('span');x.className='dup-count';x.textContent='×'+count;x.title='同じ高さの実音が'+count+'弦で重複';el.append(x)}
+ function label(t,cls=''){const e=document.createElement('div');e.className='label '+cls;e.textContent=t;b.append(e);return e}
+ function button(t,cls,fn,title){const e=document.createElement('button');e.className=cls;e.textContent=t;e.title=title||t;e.onclick=fn;b.append(e);return e}
+ // Header row: fixed string/root/open columns, then fret numbers 1–21, then root at the far end.
+ label('弦','string-label');label('R','root-left');label('0/×','state-left');
+ for(let f=1;f<=21;f++)label(String(f),'fret-label');label('R');
+ // Six strings are horizontal rows, matching the physical guitar neck direction.
+ [5,4,3,2,1,0].forEach(i=>{
+  const n=tuning[i];
+  label((6-i)+' '+noteName((n+capo)%12),'string-label');
+  const currentFret=shape[i],currentPc=currentFret<0?null:(n+currentFret+capo)%12;
+  button('R','rootbtn root-left'+(currentPc!==null&&selectedRoot===currentPc?' active':''),()=>{if(currentPc!==null){selectedRoot=currentPc;mode='fixed';draw()}},currentPc===null?'この弦はミュート':noteName(currentPc)+'をルートに指定');
+  const stateBtn=button(currentFret===0?'○':currentFret<0?'×':currentFret+'f','state state-left',()=>{const nf=currentFret===0?-1:0;shape[i]=nf;draw();if(nf===0)tapNote(tuning[i]+capo)});if(currentFret===0)addDupBadge(stateBtn,duplicateCount(i));
+  for(let f=1;f<=21;f++){
+   const pc=(n+f+capo)%12,sel=shape[i]===f;
+   const dup=sel?duplicateCount(i):0;const btn=button('','cell'+(sel?' selected':'')+(dup>1?' duplicate':''),()=>{const nf=sel?0:f;shape[i]=nf;draw();if(nf>=0)tapNote(tuning[i]+nf+capo)},(6-i)+'弦 '+f+'フレット '+noteName(pc)+(dup>1?'（同じ実音が'+dup+'弦で重複）':''));
+   btn.setAttribute('aria-pressed',String(sel));
+   if([3,5,7,9,12,15,17,19,21].includes(f)){const m=document.createElement('span');m.className='marker';btn.append(m)}
+   if(sel){const d=document.createElement('span');d.className='dot';const note=document.createElement('span');note.className='note';note.textContent=noteName(pc);d.append(note);if(activeRoot!==null){const iv=(pc-activeRoot+12)%12;const degree=document.createElement('span');degree.className='degree';degree.textContent=ivLabels[iv];d.append(degree);d.classList.add(roleClass(iv))}btn.append(d);if(dup>1)addDupBadge(btn,dup)}
+  }
+  button('R','rootbtn'+(currentPc!==null&&selectedRoot===currentPc?' active':''),()=>{if(currentPc!==null){selectedRoot=currentPc;mode='fixed';draw()}},currentPc===null?'この弦はミュート':noteName(currentPc)+'をルートに指定');
+ });
+ $('rootinfo').textContent='指定ルート：'+(selectedRoot===null?'未指定':noteName(selectedRoot))+'　／　最低音：'+(a.bass===null?'なし':noteName(a.bass))+'　／　カポ：'+(capo||'なし')+'　／　モード：'+({fixed:'指定ルート優先',auto:'自動推測',bass:'最低音優先'}[mode]);const allOpen=shape.every(v=>v===0);$('name').textContent=allOpen?'全弦開放':!a.midi.length?'指板をタップ':primary?displayName(primary,a.bass):'コード名を特定できません';$('voice').textContent=confidenceLine(a,primary);let reason=primary?((primary.exact?'構成音一致':'省略音を含む推測')+'：'+primary.reason):a.midi.length?'音名・音程は確定しています。無理に名前を付けません。':'';if(primary&&mode==='fixed'&&selectedRoot!==null&&a.bass!==selectedRoot)reason+='　最低音は'+noteName(a.bass)+'（分数コード表記 '+primary.slashName+' も可能）';$('reason').textContent=reason;
+ const chips=$('chips');chips.replaceChildren();a.pcs.forEach(pc=>{const el=document.createElement('span'),iv=activeRoot===null?null:(pc-activeRoot+12)%12;el.className='chip '+(iv===null?'':roleClass(iv));const bold=document.createElement('b');bold.textContent=noteName(pc);el.append(bold,document.createTextNode(iv===null?'':ivLabels[iv]+' ('+iv+'半音)'));chips.append(el)});$('raw').textContent=a.midi.length?'実音（6→1弦）：'+shape.map((f,i)=>f<0?'×':noteName((tuning[i]+f+capo)%12)+' '+(f===0?'開放':f+'F')).join(' · '):'';
+ const alts=a.candidates.slice(1,6);if(primary&&mode==='fixed'&&selectedRoot!==null&&a.bass!==selectedRoot)alts.unshift({...primary,baseName:primary.slashName,slashName:primary.slashName,reason:'指定ルートは維持し、最低音をベースとして表記'});$('alternatives').classList.toggle('hidden',alts.length===0);const out=$('candidates');out.replaceChildren();const altSeen=new Set;alts.filter(c=>{const n=c.baseName;return n!==$('name').textContent&&!altSeen.has(n)&&altSeen.add(n)}).slice(0,5).forEach(c=>{const el=document.createElement('div');el.className='candidate';const strong=document.createElement('strong');strong.textContent=c.baseName;const sub=document.createElement('div');sub.className='small';sub.textContent=(c.exact?'構成音一致':'省略・別解釈を含む')+' · '+c.reason;el.append(strong,sub);out.append(el)});document.querySelectorAll('.mode').forEach(el=>el.classList.toggle('active',el.dataset.mode===mode));if(record)addHistory(a,primary);renderHistory();
+}
+let audioCtx=null,audioMaster=null,audioComp=null,audioTimer=null,volumeLevel='medium',octaveShift=1,tapSound=true,testNotePc=9;
+const volumeMap={small:.20,medium:.55,large:1.0};
+function setAudioStatus(t){$('audioStatus').textContent=t}
+function getAudio(){
+ const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return null;
+ if(!audioCtx){
+  audioCtx=new AC();audioMaster=audioCtx.createGain();audioComp=audioCtx.createDynamicsCompressor();
+  audioComp.threshold.value=-18;audioComp.knee.value=18;audioComp.ratio.value=5;audioComp.attack.value=.003;audioComp.release.value=.18;
+  audioMaster.gain.value=volumeMap[volumeLevel];audioMaster.connect(audioComp);audioComp.connect(audioCtx.destination);
+ }
+ return audioCtx;
+}
+function pluck(c,midi,when,dur=.8,level=.12){
+ const o=c.createOscillator(),g=c.createGain(),f=c.createBiquadFilter();
+ o.type='triangle';o.frequency.setValueAtTime(440*Math.pow(2,((midi+octaveShift*12)-69)/12),when);
+ f.type='lowpass';f.frequency.setValueAtTime(2600,when);f.Q.value=.35;
+ g.gain.setValueAtTime(.0001,when);g.gain.exponentialRampToValueAtTime(level,when+.012);g.gain.exponentialRampToValueAtTime(.0001,when+dur);
+ o.connect(f);f.connect(g);g.connect(audioMaster);o.start(when);o.stop(when+dur+.04);
+}
+function finishStatus(ms){clearTimeout(audioTimer);audioTimer=setTimeout(()=>setAudioStatus('試聴できます'),ms)}
+function playNow(c,arp){
+ const mids=shape.map((f,i)=>f<0?null:tuning[i]+f+capo).filter(n=>n!==null);
+ if(!mids.length){setAudioStatus('🔇 鳴らす弦がありません');return}
+ const now=c.currentTime+.018,step=arp?.14:0,dur=arp?.72:.95;
+ const perVoice=arp?.16:Math.min(.15,.34/Math.sqrt(mids.length));
+ mids.forEach((m,i)=>pluck(c,m,now+i*step,dur,perVoice));
+ setAudioStatus(arp?'アルペジオ再生中…':'コード再生中…');
+ finishStatus(Math.ceil(((mids.length-1)*step+dur+.12)*1000));
+}
+function refreshTestNotes(){const sel=$('testNote'),old=String(testNotePc);sel.replaceChildren();for(let pc=0;pc<12;pc++){const o=document.createElement('option');o.value=pc;o.textContent=noteName(pc);sel.append(o)}sel.value=old}
+function testNow(c){const now=c.currentTime+.018,midi=60+testNotePc;pluck(c,midi,now,.75,.17);setAudioStatus('テスト音 '+noteName(testNotePc)+' 再生中…');finishStatus(900)}
+function withAudio(fn){
+ try{
+  const c=getAudio();if(!c){setAudioStatus('⚠️ このブラウザは音声非対応');return}
+  if(audioMaster)audioMaster.gain.setValueAtTime(volumeMap[volumeLevel],c.currentTime);
+  /* Keep audio start tied to the user's click for iPhone/Safari, while also supporting desktop browsers. */
+  if(c.state==='running'){fn(c);return}
+  const r=c.resume();
+  if(r&&typeof r.then==='function')r.then(()=>fn(c)).catch(()=>setAudioStatus('⚠️ 音声を開始できません'));
+  else fn(c);
+ }catch(e){setAudioStatus('⚠️ 音声を開始できません')}
+}
+function play(arp){withAudio(c=>playNow(c,arp))}
+function setVolume(v){volumeLevel=v;document.querySelectorAll('#volumeGroup button').forEach(b=>b.classList.toggle('active',b.dataset.vol===v));if(audioCtx&&audioMaster)audioMaster.gain.setValueAtTime(volumeMap[v],audioCtx.currentTime)}
+function updateOctave(){const shown=octaveShift-1;$('octValue').textContent=shown>0?'+'+shown:String(shown);$('octDown').disabled=octaveShift<=-1;$('octUp').disabled=octaveShift>=3 }
+function resetAll(){shape=[0,0,0,0,0,0];selectedRoot=null;mode='auto';capo=0;useSharps=true;history=[];tuningKey='standard';tuning=[...tunings.standard];octaveShift=1;$('tune').value='standard';$('capo').value='0';$('accidental').textContent='♯';document.querySelectorAll('.mode').forEach(el=>el.classList.toggle('active',el.dataset.mode==='auto'));$('alternatives').open=false;refreshTestNotes();updateOctave();setAudioStatus('試聴できます');draw(false)}
+$('tune').onchange=()=>{tuningKey=$('tune').value;tuning=[...tunings[tuningKey]];selectedRoot=null;draw(false)};$('capo').onchange=()=>{capo=Number($('capo').value);if(selectedRoot!==null)selectedRoot=(selectedRoot+0)%12;draw()};$('accidental').onclick=()=>{useSharps=!useSharps;$('accidental').textContent=useSharps?'♯':'♭';refreshTestNotes();draw(false)};$('clear').onclick=()=>{shape.fill(-1);selectedRoot=null;draw(false)};$('reset').onclick=resetAll;$('playChord').onclick=()=>play(false);$('playArp').onclick=()=>play(true);$('testTone').onclick=()=>withAudio(testNow);$('testNote').onchange=()=>{testNotePc=Number($('testNote').value)};$('tapSound').onclick=()=>{tapSound=!tapSound;$('tapSound').classList.toggle('active',tapSound);$('tapSound').textContent=tapSound?'タップ音 ON':'タップ音 OFF';};document.querySelectorAll('#volumeGroup button').forEach(b=>b.onclick=()=>setVolume(b.dataset.vol));$('octDown').onclick=()=>{octaveShift=Math.max(-1,octaveShift-1);updateOctave()};$('octUp').onclick=()=>{octaveShift=Math.min(3,octaveShift+1);updateOctave()};document.querySelectorAll('.mode').forEach(el=>el.onclick=()=>{mode=el.dataset.mode;draw()});$('tune').value=tuningKey;refreshTestNotes();updateOctave();draw(false);
+})();</script></body></html>
