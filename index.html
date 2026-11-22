@@ -54,10 +54,12 @@ h1{margin-bottom:3px}
  .horizontal-board .dot{width:31px;height:31px}
 }
 .one-note-list{display:grid;gap:7px;margin:8px 0}.one-note-list button{width:100%;min-width:0;text-align:left;white-space:normal;overflow-wrap:anywhere}.one-note-list button span{display:block}
+.piano-scroll{max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;margin:8px 0;border:1px solid #56605c;border-radius:7px;background:#171b1d}.piano-keys{position:relative;height:144px}.piano-key{position:absolute;top:0;width:36px;height:140px;background:#eee;color:#171b1d;border:1px solid #777;border-radius:0 0 4px 4px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;padding-bottom:6px;font-size:11px;line-height:1.4}.piano-key.black{z-index:1;width:26px;height:88px;background:#202427;color:#eee;border-color:#080a0b;font-size:10px}.piano-key.selected{background:#95dfb7;color:#10271a;border:2px solid #26734f}.piano-key.black.selected{background:#31634a;color:#fff;border-color:#b7f3d2}.piano-key .piano-count{font-weight:800;color:inherit}.piano-notes{overflow-wrap:anywhere}
 </style></head><body><main class="app"><h1>🎸 逆引きくん <span class="muted">v1.2</span></h1><div class="muted">このコード、なんだろ？ 逆引きくんが華麗にお答えします。たぶん。</div><div class="muted">標準チューニング E A D G B E · 実物のネック感覚で左→右へ。指板は横スクロールできます。</div>
 <div class="toolbar"><label>TUNE <select id="tune"><option value="standard">STD</option><option value="dropd">Drop D</option><option value="opend">Open D</option><option value="openg">Open G</option><option value="dadgad">DADGAD</option></select></label><label>CAPO <select id="capo"></select></label><button id="accidental">♯</button><button id="clear">全弦ミュート</button><button id="reset">リセット</button></div>
 <div class="muted">左端：○ 開放 / × ミュート。フレット再タップで開放へ戻る。左端の ○/× で開放・ミュートを切替。各弦の前後の R ボタンでルートを指定。指板部分は左右にスワイプできます。</div><div class="play-strip audio" aria-label="試聴ボタン"><button id="playChord">コード</button><button id="playArp">アルペジオ</button><button id="testTone">テスト</button><label class="test-note">音 <select id="testNote" aria-label="テスト音のノート"></select></label></div><div class="board-scroll" id="boardScroll"><div id="board" class="board horizontal-board"></div></div>
 <div class="panel"><div class="muted">ルート判定モード</div><div class="modes"><button class="mode" data-mode="fixed">指定ルート優先</button><button class="mode active" data-mode="auto">自動推測</button><button class="mode" data-mode="bass">最低音優先</button></div><div class="small" id="rootinfo"></div><div class="title" id="name">指板をタップ</div><div class="small" id="voice"></div><div class="small" id="reason"></div><div class="chips" id="chips"></div><div class="small" id="raw"></div>
+<details id="pianoView"><summary>鍵盤ビュー</summary><div class="small">ギター実音を表示しています。試聴OCT設定は反映しません。</div><div class="piano-scroll" id="pianoScroll" tabindex="0" role="region" aria-label="ギター実音の鍵盤 C2〜D7（横スクロール）"><div class="piano-keys" id="pianoKeys"></div></div><div class="small piano-notes" id="pianoNotes"></div></details>
 <div class="toolbar audio"><button id="tapSound" class="active">タップ音 ON</button></div>
 <div class="audio-controls"><span class="muted">音量</span><div class="group" id="volumeGroup"><button data-vol="small">小</button><button class="active" data-vol="medium">中</button><button data-vol="large">大</button></div><span class="muted">OCT</span><div class="group"><button id="octDown">−</button><button id="octValue" class="wide" disabled>0</button><button id="octUp">＋</button></div></div>
 <div class="small hint">簡易確認音です。ミュート弦は鳴らさず、カポ設定後の実音を再生します。オクターブ設定は試聴だけに作用します。 <span id="audioStatus">試聴できます</span></div>
@@ -78,6 +80,37 @@ candidates.sort((a,b)=>b.score-a.score||a.baseName.length-b.baseName.length||a.b
 function displayName(c,bass){if(!c)return '';if(mode==='fixed'&&selectedRoot!==null)return c.baseName;return c.slashName}
 function addHistory(a,primary){if(!a.midi.length)return;const key=[shape.join(','),selectedRoot,capo,mode,useSharps,tuningKey].join('|');if(history[0]?.shape.join(',')===shape.join(',')&&history[0].capo===capo&&history[0].tuningKey===tuningKey)return;history=history.filter(h=>h.key!==key);history.unshift({key,shape:[...shape],selectedRoot,capo,mode,useSharps,tuningKey,label:primary?displayName(primary,a.bass):$('name').textContent});history=history.slice(0,8)}
 function renderHistory(){const box=$('history');box.replaceChildren();if(!history.length){const s=document.createElement('span');s.className='small';s.textContent='まだ履歴はありません';box.append(s);return}history.forEach(h=>{const b=document.createElement('button');b.textContent=h.label+(h.capo?' · capo '+h.capo:'');b.onclick=()=>{shape=[...h.shape];selectedRoot=h.selectedRoot;capo=h.capo;mode=h.mode;useSharps=h.useSharps;tuningKey=h.tuningKey||'standard';tuning=[...tunings[tuningKey]];$('tune').value=tuningKey;$('capo').value=capo;$('accidental').textContent=useSharps?'♯':'♭';draw(false)};box.append(b)})}
+function countMidiNotes(midi){
+ const counts=new Map;for(const note of midi)counts.set(note,(counts.get(note)||0)+1);
+ return [...counts].sort((a,b)=>a[0]-b[0]).map(([midi,count])=>({midi,count}));
+}
+function pianoRange(){return {min:36,max:98}}
+function renderPiano(notes,range,nameForNote){
+ const keyboard=$('pianoKeys'),counts=new Map(notes.map(n=>[n.midi,n.count]));
+ // Keep fixed key elements so updates never move the user's scroll position.
+ if(!keyboard.children.length){
+  let whiteCount=0;
+  for(let midi=range.min;midi<=range.max;midi++){
+   const black=[1,3,6,8,10].includes(midi%12),key=document.createElement('div');
+   key.className='piano-key'+(black?' black':'');key.dataset.midi=midi;
+   key.style.left=(black?whiteCount*36-13:whiteCount*36)+'px';
+   if(!black)whiteCount++;
+   key.setAttribute('role','img');
+   const count=document.createElement('span');count.className='piano-count';
+   const label=document.createElement('span');label.className='piano-label';key.append(count,label);keyboard.append(key);
+  }
+  keyboard.style.width=whiteCount*36+'px';
+ }
+ const labelFor=midi=>nameForNote(midi)+(Math.floor(midi/12)-1);
+ for(const key of keyboard.children){
+  const midi=Number(key.dataset.midi),count=counts.get(midi)||0,label=labelFor(midi);
+  key.classList.toggle('selected',count>0);
+  key.querySelector('.piano-label').textContent=count?label:'';
+  key.querySelector('.piano-count').textContent=count>1?'×'+count:'';
+  key.setAttribute('aria-label',label+(count?'：'+count+'弦':'：選択なし'));
+ }
+ $('pianoNotes').textContent=notes.length?notes.map(n=>labelFor(n.midi)+(n.count>1?' ×'+n.count:'')).join(' · '):'鳴っている音はありません';
+}
 function oneNoteCandidates(){
  const selected=[],uses=Array(6).fill(0);
  // One candidate per available movement; balance strings before using a fixed string order.
@@ -147,7 +180,7 @@ function draw(record=true){
  });
  $('rootinfo').textContent='指定ルート：'+(selectedRoot===null?'未指定':noteName(selectedRoot))+'　／　最低音：'+(a.bass===null?'なし':noteName(a.bass))+'　／　カポ：'+(capo||'なし')+'　／　モード：'+({fixed:'指定ルート優先',auto:'自動推測',bass:'最低音優先'}[mode]);const allOpen=shape.every(v=>v===0);$('name').textContent=allOpen?'全弦開放':!a.midi.length?'指板をタップ':primary?displayName(primary,a.bass):'コード名を特定できません';$('voice').textContent=confidenceLine(a,primary);let reason=primary?((primary.exact?'構成音一致':'省略音を含む推測')+'：'+primary.reason):a.midi.length?'音名・音程は確定しています。無理に名前を付けません。':'';if(primary&&mode==='fixed'&&selectedRoot!==null&&a.bass!==selectedRoot)reason+='　最低音は'+noteName(a.bass)+'（分数コード表記 '+primary.slashName+' も可能）';$('reason').textContent=reason;
  const chips=$('chips');chips.replaceChildren();a.pcs.forEach(pc=>{const el=document.createElement('span'),iv=activeRoot===null?null:(pc-activeRoot+12)%12;el.className='chip '+(iv===null?'':roleClass(iv));const bold=document.createElement('b');bold.textContent=noteName(pc);el.append(bold,document.createTextNode(iv===null?'':ivLabels[iv]+' ('+iv+'半音)'));chips.append(el)});$('raw').textContent=a.midi.length?'実音（6→1弦）：'+shape.map((f,i)=>f<0?'×':noteName((tuning[i]+f+capo)%12)+' '+(f===0?'開放':f+'F')).join(' · '):'';
- const alts=a.candidates.slice(1,6);if(primary&&mode==='fixed'&&selectedRoot!==null&&a.bass!==selectedRoot)alts.unshift({...primary,baseName:primary.slashName,slashName:primary.slashName,reason:'指定ルートは維持し、最低音をベースとして表記'});$('alternatives').classList.toggle('hidden',alts.length===0);const out=$('candidates');out.replaceChildren();const altSeen=new Set;alts.filter(c=>{const n=c.baseName;return n!==$('name').textContent&&!altSeen.has(n)&&altSeen.add(n)}).slice(0,5).forEach(c=>{const el=document.createElement('div');el.className='candidate';const strong=document.createElement('strong');strong.textContent=c.baseName;const sub=document.createElement('div');sub.className='small';sub.textContent=(c.exact?'構成音一致':'省略・別解釈を含む')+' · '+c.reason;el.append(strong,sub);out.append(el)});document.querySelectorAll('.mode').forEach(el=>el.classList.toggle('active',el.dataset.mode===mode));renderHistory();renderOneNote();
+ const alts=a.candidates.slice(1,6);if(primary&&mode==='fixed'&&selectedRoot!==null&&a.bass!==selectedRoot)alts.unshift({...primary,baseName:primary.slashName,slashName:primary.slashName,reason:'指定ルートは維持し、最低音をベースとして表記'});$('alternatives').classList.toggle('hidden',alts.length===0);const out=$('candidates');out.replaceChildren();const altSeen=new Set;alts.filter(c=>{const n=c.baseName;return n!==$('name').textContent&&!altSeen.has(n)&&altSeen.add(n)}).slice(0,5).forEach(c=>{const el=document.createElement('div');el.className='candidate';const strong=document.createElement('strong');strong.textContent=c.baseName;const sub=document.createElement('div');sub.className='small';sub.textContent=(c.exact?'構成音一致':'省略・別解釈を含む')+' · '+c.reason;el.append(strong,sub);out.append(el)});document.querySelectorAll('.mode').forEach(el=>el.classList.toggle('active',el.dataset.mode===mode));renderHistory();renderOneNote();renderPiano(countMidiNotes(voicedMidi()),pianoRange(),noteName);
 }
 let audioCtx=null,audioMaster=null,audioComp=null,audioTimer=null,volumeLevel='medium',octaveShift=1,tapSound=true,testNotePc=9;
 const volumeMap={small:.20,medium:.55,large:1.0};
